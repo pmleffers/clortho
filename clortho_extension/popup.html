@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="script-src 'self'; object-src 'self'">
+<title>Clortho</title>
+<style>
+:root {
+  --bg: #0a0000;
+  --surface: #130303;
+  --border: #3a0f0f;
+  --accent: #cc2222;
+  --danger: #ff4d6a;
+  --warn: #ffb347;
+  --text: #f0e8e8;
+  --muted: #886666;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  width: 300px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, 'Segoe UI', sans-serif;
+  font-size: 13px;
+}
+
+/* Header */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.logo {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+}
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.open-ui-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 7px;
+  transition: color 0.12s, border-color 0.12s;
+  white-space: nowrap;
+}
+.open-ui-btn:hover { color: var(--accent); border-color: var(--accent); }
+.status-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 4px;
+}
+.status-dot.ok     { background: var(--accent); }
+.status-dot.locked { background: var(--warn); }
+.status-dot.off    { background: var(--danger); }
+.status-text { font-size: 11px; color: var(--muted); }
+
+/* Sections */
+.section { padding: 10px 14px; border-bottom: 1px solid var(--border); }
+.section-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+/* Entry rows */
+.entry {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.12s;
+  margin-bottom: 2px;
+}
+.entry:hover { background: #220808; }
+.entry-icon {
+  width: 26px; height: 26px;
+  background: var(--border);
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.entry-site  { font-weight: 500; font-size: 13px; }
+.entry-user  { font-size: 11px; color: var(--muted); font-family: monospace; }
+.fill-btn {
+  margin-left: auto;
+  background: var(--accent);
+  color: #000;
+  border: none;
+  border-radius: 4px;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.12s;
+}
+.fill-btn:hover { background: #ff4444; }
+
+/* States */
+.empty-state {
+  padding: 14px 0;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+  line-height: 1.6;
+}
+.locked-state {
+  padding: 16px 14px;
+  text-align: center;
+}
+.locked-state .lock-icon { font-size: 28px; margin-bottom: 8px; }
+.locked-state .lock-msg { color: var(--muted); font-size: 12px; margin-bottom: 10px; line-height: 1.5; }
+.open-btn {
+  width: 100%;
+  padding: 8px;
+  background: var(--accent);
+  color: #000;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.open-btn:hover { background: #ff4444; }
+
+/* Password generator */
+.gen-output {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 10px;
+  margin-bottom: 8px;
+}
+#gen-password {
+  flex: 1;
+  font-family: monospace;
+  font-size: 12px;
+  color: var(--accent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: all;
+}
+.gen-icon-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 0 2px;
+  flex-shrink: 0;
+  transition: color 0.12s;
+}
+.gen-icon-btn:hover { color: var(--accent); }
+.gen-length {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 7px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.gen-length input[type=range] {
+  flex: 1;
+  accent-color: var(--accent);
+  height: 3px;
+}
+.gen-length span { min-width: 20px; text-align: right; color: var(--text); font-family: monospace; }
+.gen-chars {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.gen-chars label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 3px 7px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  transition: border-color 0.12s, color 0.12s;
+}
+.gen-chars label:has(input:checked) {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.gen-chars input[type=checkbox] { accent-color: var(--accent); margin: 0; }
+
+/* Footer */
+.footer {
+  padding: 8px 14px;
+  font-size: 10px;
+  color: #3a1515;
+  text-align: center;
+  letter-spacing: 0.03em;
+}
+
+/* Toast */
+#toast {
+  position: fixed;
+  bottom: 8px; left: 14px; right: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 7px 12px;
+  font-size: 12px;
+  text-align: center;
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+}
+#toast.show { opacity: 1; }
+#toast.ok   { color: var(--accent); }
+#toast.err  { color: var(--danger); }
+</style>
+</head>
+<body>
+<div class="header">
+  <span class="logo">🔐 CLORTHO</span>
+  <div class="header-right">
+    <button class="open-ui-btn" id="open-ui-btn">Open Vault ↗</button>
+    <span class="status-text">
+      <span class="status-dot" id="status-dot"></span>
+      <span id="status-label">Checking…</span>
+    </span>
+  </div>
+</div>
+
+<div id="body-area"></div>
+
+<div class="footer">Vault runs locally · nothing leaves your machine</div>
+<div id="toast"></div>
+
+<script src="popup.js"></script>
+</body>
+</html>

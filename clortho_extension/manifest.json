@@ -1,0 +1,53 @@
+{
+  "manifest_version": 2,
+  "name": "Clortho",
+  "version": "1.0.0",
+  "description": "Autofill credentials from your local Clortho vault",
+
+  "permissions": [
+    "activeTab",
+    "storage",
+    "http://127.0.0.1:7777/*"
+  ],
+
+  "background": {
+    "scripts": ["background.js"],
+    "persistent": false
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle",
+      "match_about_blank": false
+    }
+  ],
+
+  "browser_action": {
+    "default_popup": "popup.html",
+    "default_title": "Clortho",
+    "default_icon": {
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "96": "icons/icon96.png",
+      "128": "icons/icon128.png"
+    }
+  },
+
+  "icons": {
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "96": "icons/icon96.png",
+    "128": "icons/icon128.png"
+  },
+
+  "content_security_policy": "script-src 'self'; object-src 'self'",
+
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "clortho@local",
+      "strict_min_version": "109.0"
+    }
+  }
+}

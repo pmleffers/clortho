@@ -1,0 +1,24 @@
+# Sensitive / personal data — never commit
+bitwarden_export.csv
+cloudflare-*.txt
+pass.txt
+*.vk
+.vk_salt
+
+# Old project archive
+files/
+files.zip
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db

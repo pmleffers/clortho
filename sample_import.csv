@@ -1,0 +1,6 @@
+site,username,password,url,notes,category
+GitHub,jsmith@email.com,MyGithubPass1!,https://github.com,Work dev account,Development
+Gmail,jsmith@gmail.com,GmailPass2024!,https://mail.google.com,,Email
+Netflix,jsmith@email.com,NetflixPass99,https://netflix.com,Family plan,Entertainment
+AWS Console,jsmith@email.com,AWSsecret#2024,https://console.aws.amazon.com,Production account,Cloud
+Dropbox,jsmith@email.com,DropboxPass!,https://dropbox.com,,Storage
