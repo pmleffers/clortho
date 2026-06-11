@@ -22,3 +22,7 @@ venv/
 # OS
 .DS_Store
 Thumbs.db
+
+# web-ext build artifacts (internal)
+clortho_extension/.amo-upload-uuid
+web-ext-artifacts/*.xpi
