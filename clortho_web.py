@@ -433,6 +433,9 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
       <div class="nav-item" onclick="openAddModal()">
         <span class="nav-icon">+</span> Add Entry
       </div>
+      <div class="nav-item" onclick="openApiKeyModal()">
+        <span class="nav-icon">🔑</span> Add API Key
+      </div>
       <div class="nav-item" onclick="openImportModal()">
         <span class="nav-icon">↑</span> Import CSV/Excel
       </div>
@@ -513,6 +516,45 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('entry-modal')">Cancel</button>
       <button class="btn btn-primary" onclick="saveEntry()">Save Entry</button>
+    </div>
+  </div>
+</div>
+
+<!-- API Key modal -->
+<div class="modal-backdrop" id="apikey-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">🔑 Add API Key</span>
+      <button class="panel-close" onclick="closeModal('apikey-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Service *</label>
+        <input class="form-input" id="ak-service" placeholder="GitHub, AWS, Stripe…">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Key Name *</label>
+        <input class="form-input" id="ak-name" placeholder="Personal Access Token, API Key…">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Token / Key Value *</label>
+        <div class="pw-row">
+          <input class="form-input" id="ak-token" type="password" placeholder="••••••••••••••••">
+          <button class="gen-btn" onclick="togglePw('ak-token')">👁</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">API Endpoint / Docs URL</label>
+        <input class="form-input" id="ak-url" placeholder="https://api.example.com">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Scopes / Notes</label>
+        <input class="form-input" id="ak-notes" placeholder="repo, read:user — expires 2027-01-01">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('apikey-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveApiKey()">Save Key</button>
     </div>
   </div>
 </div>
@@ -629,7 +671,7 @@ function renderEntries() {
     return;
   }
   el.innerHTML = list.map(e => {
-    const icon = siteIcon(e.site, e.url);
+    const icon = siteIcon(e.site, e.url, e.category);
     const catClass = 'cat-' + (e.category||'general').toLowerCase().replace(/\s+/g,'-');
     return `<div class="entry-card" onclick="openPanel('${e.id}')">
       <div class="entry-icon">${icon}</div>
@@ -662,7 +704,8 @@ function renderCategoryNav() {
   el.innerHTML = html;
 }
 
-function siteIcon(site, url) {
+function siteIcon(site, url, category) {
+  if (category === 'API Keys') return '🔑';
   const icons = {
     github:'🐙', google:'🔍', gmail:'✉️', mail:'✉️', email:'✉️',
     twitter:'🐦', facebook:'👤', instagram:'📷', linkedin:'💼',
@@ -682,12 +725,13 @@ function openPanel(id) {
   currentEntryId = id;
   document.getElementById('panel-site').textContent = e.site;
   const body = document.getElementById('panel-body');
+  const isApiKey = e.category === 'API Keys';
   body.innerHTML = `
-    ${field('Username', e.username, true)}
-    ${field('Password', e.password, true, true)}
-    ${e.url ? field('URL', e.url, true) : ''}
+    ${field(isApiKey ? 'Key Name' : 'Username', e.username, true)}
+    ${field(isApiKey ? 'Token' : 'Password', e.password, true, true)}
+    ${e.url ? field(isApiKey ? 'Endpoint / Docs' : 'URL', e.url, true) : ''}
     ${e.category ? field('Category', e.category, false) : ''}
-    ${e.notes ? field('Notes', e.notes, false) : ''}
+    ${e.notes ? field(isApiKey ? 'Scopes / Notes' : 'Notes', e.notes, false) : ''}
     ${field('Entry ID', e.id, false)}
     <div style="margin-top:16px;font-size:11px;color:var(--muted)">
       Created ${e.created ? e.created.split('T')[0] : '—'} &nbsp;·&nbsp;
@@ -731,6 +775,32 @@ function openAddModal() {
   document.getElementById('f-cat').value = 'General';
   openModal('entry-modal');
   setTimeout(() => document.getElementById('f-site').focus(), 100);
+}
+
+function openApiKeyModal() {
+  ['ak-service','ak-name','ak-token','ak-url','ak-notes'].forEach(id => document.getElementById(id).value = '');
+  openModal('apikey-modal');
+  setTimeout(() => document.getElementById('ak-service').focus(), 100);
+}
+
+async function saveApiKey() {
+  const service = document.getElementById('ak-service').value.trim();
+  const name    = document.getElementById('ak-name').value.trim();
+  const token   = document.getElementById('ak-token').value.trim();
+  if (!service || !name || !token) { showToast('Service, Key Name and Token are required', 'error'); return; }
+  const body = {
+    site:     service,
+    username: name,
+    password: token,
+    url:      document.getElementById('ak-url').value.trim(),
+    notes:    document.getElementById('ak-notes').value.trim(),
+    category: 'API Keys',
+  };
+  const r = await fetch('/api/entries', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+  if (!r.ok) { showToast('Failed to save', 'error'); return; }
+  closeModal('apikey-modal');
+  await loadEntries();
+  showToast('API key saved');
 }
 
 function quickEdit(id) { editEntry(id); }
