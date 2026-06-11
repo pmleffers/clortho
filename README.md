@@ -1,6 +1,35 @@
-# 🔐 Clortho
+<div align="center">
 
-A fully local, encrypted password manager written in Python. No cloud. No accounts. No tracking.
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="120" height="120">
+  <g transform="translate(48,52) scale(1.25) translate(-48,-52)">
+    <path d="M20,37 Q4,24 14,16 Q16,19 34,32 Z" fill="#2a0806"/>
+    <path d="M22,36 Q6,25 16,17 Q18,20 32,31 Z" fill="#cc3322"/>
+    <path d="M76,37 Q92,24 82,16 Q80,19 62,32 Z" fill="#2a0806"/>
+    <path d="M74,36 Q90,25 80,17 Q78,20 64,31 Z" fill="#cc3322"/>
+    <circle cx="48" cy="54" r="34" fill="#2a0806"/>
+    <circle cx="48" cy="54" r="30" fill="#dd3a28"/>
+    <ellipse cx="30" cy="50" rx="12" ry="6.5" fill="white" transform="rotate(22,30,50)"/>
+    <ellipse cx="66" cy="50" rx="12" ry="6.5" fill="white" transform="rotate(-22,66,50)"/>
+    <circle cx="30" cy="50" r="3.5" fill="#1a0000"/>
+    <circle cx="66" cy="50" r="3.5" fill="#1a0000"/>
+    <path d="M15,44 Q28,37 40,53" stroke="#2a0806" stroke-width="5.5" fill="none" stroke-linecap="round"/>
+    <path d="M56,53 Q68,37 81,44" stroke="#2a0806" stroke-width="5.5" fill="none" stroke-linecap="round"/>
+    <path d="M34,68 Q46,80 62,66" stroke="#2a0806" stroke-width="4" fill="none" stroke-linecap="round"/>
+  </g>
+</svg>
+
+# Clortho
+
+**A fully local, encrypted password manager written in Python.**  
+No cloud. No accounts. No tracking. No surprises.
+
+![Python](https://img.shields.io/badge/Python-3.10%2B-cc2222?style=flat-square&logo=python&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-cc2222?style=flat-square)
+![Platform](https://img.shields.io/badge/Platform-Linux-cc2222?style=flat-square&logo=linux&logoColor=white)
+
+</div>
+
+---
 
 Three layers work together: a **CLI** for direct vault access, a **local web UI** for a full-featured browser interface, and a **Firefox extension** that autofills your credentials on any website.
 
