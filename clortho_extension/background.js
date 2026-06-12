@@ -135,6 +135,28 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
 
+  if (msg.type === "START_SERVER") {
+    let responded = false;
+    let port;
+    try {
+      port = browser.runtime.connectNative("clortho_host");
+    } catch (e) {
+      sendResponse({ ok: false, error: "Native host not installed — run install_desktop.sh first." });
+      return true;
+    }
+    port.postMessage({ type: "start_server" });
+    port.onMessage.addListener((response) => {
+      if (!responded) { responded = true; port.disconnect(); sendResponse(response); }
+    });
+    port.onDisconnect.addListener(() => {
+      if (!responded) {
+        responded = true;
+        sendResponse({ ok: false, error: "Native host not installed — run install_desktop.sh first." });
+      }
+    });
+    return true;
+  }
+
   if (msg.type === "STORE_TOKEN") {
     // Relayed from content script running on the vault page after user unlocks
     if (msg.token) {

@@ -3,9 +3,10 @@
 #
 # What this does:
 #   1. Installs the padlock icon into ~/.local/share/icons/
-#   2. Writes a launcher script to ~/.local/bin/clortho
-#   3. Writes a .desktop file to ~/.local/share/applications/
-#   4. Refreshes the desktop database so the icon appears immediately
+#   2. Installs the native messaging host for the Firefox extension
+#   3. Writes a launcher script to ~/.local/bin/clortho
+#   4. Writes a .desktop file to ~/.local/share/applications/
+#   5. Refreshes the desktop database so the icon appears immediately
 
 set -euo pipefail
 
@@ -50,14 +51,49 @@ for size in 32 48 96 128; do
     fi
 done
 
-# ── 2. Write launcher script ──────────────────────────────────────────
+# ── 2. Install native messaging host ─────────────────────────────────
+info "Installing native messaging host..."
+
+NM_HOST_PATH="${BIN_DIR}/clortho_native_host"
+NM_MANIFEST_SRC="${SCRIPT_DIR}/clortho_native_host.json"
+NM_FILENAME="clortho_host.json"
+
+# Copy the host script into ~/.local/bin/ with the project path baked in.
+# This puts it somewhere Flatpak Firefox can actually execute it.
+sed "s|PLACEHOLDER_PROJECT_DIR|${SCRIPT_DIR}|g" \
+    "${SCRIPT_DIR}/clortho_native_host.py" > "${NM_HOST_PATH}"
+chmod +x "${NM_HOST_PATH}"
+ok "Native host installed → ${NM_HOST_PATH}"
+
+# Install the manifest, pointing at the ~/.local/bin/ copy
+_install_nm_manifest() {
+    local dest_dir="$1"
+    mkdir -p "${dest_dir}"
+    sed "s|PLACEHOLDER_PROJECT_DIR/clortho_native_host.py|${NM_HOST_PATH}|g" \
+        "${NM_MANIFEST_SRC}" > "${dest_dir}/${NM_FILENAME}"
+    ok "Native messaging manifest → ${dest_dir}/${NM_FILENAME}"
+}
+
+# System Firefox
+_install_nm_manifest "${HOME}/.mozilla/native-messaging-hosts"
+
+# Flatpak Firefox (Bazzite / Fedora Silverblue)
+FLATPAK_NM_DIR="${HOME}/.var/app/org.mozilla.firefox/.mozilla/native-messaging-hosts"
+if flatpak list 2>/dev/null | grep -q "org.mozilla.firefox"; then
+    _install_nm_manifest "${FLATPAK_NM_DIR}"
+else
+    warn "Flatpak Firefox not detected — skipping Flatpak native messaging install"
+    info "If you install Flatpak Firefox later, run install_desktop.sh again."
+fi
+
+# ── 3. Write launcher script ──────────────────────────────────────────
 info "Writing launcher to ${LAUNCHER_PATH}..."
 sed "s|PLACEHOLDER_PROJECT_DIR|${SCRIPT_DIR}|g" \
     "${SCRIPT_DIR}/clortho_desktop_launch.sh" > "${LAUNCHER_PATH}"
 chmod +x "${LAUNCHER_PATH}"
 ok "Launcher installed"
 
-# ── 3. Write .desktop file ────────────────────────────────────────────
+# ── 4. Write .desktop file ────────────────────────────────────────────
 info "Writing desktop entry to ${DESKTOP_PATH}..."
 cat > "${DESKTOP_PATH}" << EOF
 [Desktop Entry]
@@ -76,7 +112,7 @@ EOF
 chmod 644 "${DESKTOP_PATH}"
 ok "Desktop entry written"
 
-# ── 4. Refresh desktop databases ──────────────────────────────────────
+# ── 5. Refresh desktop databases ──────────────────────────────────────
 info "Refreshing desktop database..."
 update-desktop-database "${DESKTOP_DIR}" 2>/dev/null && ok "Desktop database updated" || warn "update-desktop-database not found — skipping"
 gtk-update-icon-cache -f "${ICONS_DIR}" 2>/dev/null || true
