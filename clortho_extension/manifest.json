@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Clortho",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Autofill credentials from your self-hosted Clortho password vault. Clortho is a fully local, encrypted password manager — no cloud, no accounts. This extension connects only to your local vault server at 127.0.0.1:7777.",
   "homepage_url": "https://github.com/pmleffers/clortho",
   "author": "pmleffers",
@@ -9,7 +9,6 @@
   "permissions": [
     "activeTab",
     "storage",
-    "nativeMessaging",
     "http://127.0.0.1:7777/*"
   ],
 

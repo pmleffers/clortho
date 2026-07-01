@@ -1,7 +1,0 @@
-{
-  "name": "clortho_host",
-  "description": "Clortho native messaging host — starts the vault server on demand",
-  "path": "PLACEHOLDER_PROJECT_DIR/clortho_native_host.py",
-  "type": "stdio",
-  "allowed_extensions": ["clortho@local"]
-}

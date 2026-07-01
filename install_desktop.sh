@@ -3,7 +3,9 @@
 #
 # What this does:
 #   1. Installs the padlock icon into ~/.local/share/icons/
-#   2. Installs the native messaging host for the Firefox extension
+#   2. Installs and enables the clortho.service systemd --user unit, so the
+#      vault server auto-starts at login (Firefox's Flatpak sandbox blocks
+#      native messaging, so the browser extension can't launch it on demand)
 #   3. Writes a launcher script to ~/.local/bin/clortho
 #   4. Writes a .desktop file to ~/.local/share/applications/
 #   5. Refreshes the desktop database so the icon appears immediately
@@ -14,6 +16,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BIN_DIR="${HOME}/.local/bin"
 ICONS_DIR="${HOME}/.local/share/icons/hicolor"
 DESKTOP_DIR="${HOME}/.local/share/applications"
+SYSTEMD_USER_DIR="${HOME}/.config/systemd/user"
 LAUNCHER_PATH="${BIN_DIR}/clortho"
 DESKTOP_PATH="${DESKTOP_DIR}/clortho.desktop"
 
@@ -51,40 +54,17 @@ for size in 32 48 96 128; do
     fi
 done
 
-# ── 2. Install native messaging host ─────────────────────────────────
-info "Installing native messaging host..."
+# ── 2. Install systemd --user service (auto-start vault server at login) ──
+info "Installing clortho.service (systemd --user)..."
 
-NM_HOST_PATH="${BIN_DIR}/clortho_native_host"
-NM_MANIFEST_SRC="${SCRIPT_DIR}/clortho_native_host.json"
-NM_FILENAME="clortho_host.json"
-
-# Copy the host script into ~/.local/bin/ with the project path baked in.
-# This puts it somewhere Flatpak Firefox can actually execute it.
+mkdir -p "${SYSTEMD_USER_DIR}"
 sed "s|PLACEHOLDER_PROJECT_DIR|${SCRIPT_DIR}|g" \
-    "${SCRIPT_DIR}/clortho_native_host.py" > "${NM_HOST_PATH}"
-chmod +x "${NM_HOST_PATH}"
-ok "Native host installed → ${NM_HOST_PATH}"
+    "${SCRIPT_DIR}/clortho.service" > "${SYSTEMD_USER_DIR}/clortho.service"
+ok "Service unit installed → ${SYSTEMD_USER_DIR}/clortho.service"
 
-# Install the manifest, pointing at the ~/.local/bin/ copy
-_install_nm_manifest() {
-    local dest_dir="$1"
-    mkdir -p "${dest_dir}"
-    sed "s|PLACEHOLDER_PROJECT_DIR/clortho_native_host.py|${NM_HOST_PATH}|g" \
-        "${NM_MANIFEST_SRC}" > "${dest_dir}/${NM_FILENAME}"
-    ok "Native messaging manifest → ${dest_dir}/${NM_FILENAME}"
-}
-
-# System Firefox
-_install_nm_manifest "${HOME}/.mozilla/native-messaging-hosts"
-
-# Flatpak Firefox (Bazzite / Fedora Silverblue)
-FLATPAK_NM_DIR="${HOME}/.var/app/org.mozilla.firefox/.mozilla/native-messaging-hosts"
-if flatpak list 2>/dev/null | grep -q "org.mozilla.firefox"; then
-    _install_nm_manifest "${FLATPAK_NM_DIR}"
-else
-    warn "Flatpak Firefox not detected — skipping Flatpak native messaging install"
-    info "If you install Flatpak Firefox later, run install_desktop.sh again."
-fi
+systemctl --user daemon-reload
+systemctl --user enable --now clortho.service
+ok "clortho.service enabled and started (auto-starts at login from now on)"
 
 # ── 3. Write launcher script ──────────────────────────────────────────
 info "Writing launcher to ${LAUNCHER_PATH}..."
@@ -126,7 +106,8 @@ echo -e "    ${CYAN}update-desktop-database ~/.local/share/applications${NC}"
 echo -e "  Or log out and back in."
 echo ""
 echo -e "  To uninstall:"
-echo -e "    ${CYAN}rm ${LAUNCHER_PATH} ${DESKTOP_PATH} ${ICONS_DIR}/scalable/apps/clortho.svg${NC}"
+echo -e "    ${CYAN}systemctl --user disable --now clortho.service${NC}"
+echo -e "    ${CYAN}rm ${LAUNCHER_PATH} ${DESKTOP_PATH} ${ICONS_DIR}/scalable/apps/clortho.svg ${SYSTEMD_USER_DIR}/clortho.service${NC}"
 echo ""
 
 # Warn if ~/.local/bin isn't on PATH

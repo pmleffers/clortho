@@ -1,0 +1,11 @@
+[Unit]
+Description=Clortho password vault server
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 PLACEHOLDER_PROJECT_DIR/clortho_web.py --vault %h/.clortho --port 7777 --no-browser
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target

@@ -135,11 +135,9 @@ async function init() {
   const label = document.getElementById("status-label");
   const body  = document.getElementById("body-area");
 
-  // Open Vault — starts the server first if it isn't running
-  let _starting = false;
+  // Open Vault — the server runs as a systemd --user service (clortho.service),
+  // started automatically at login, so it should already be up.
   document.getElementById("open-ui-btn").addEventListener("click", async () => {
-    if (_starting) return;
-
     const current = await browser.runtime.sendMessage({ type: "CHECK_STATUS" });
     if (current.running) {
       browser.tabs.create({ url: `${VAULT_URL}/unlock` });
@@ -147,26 +145,7 @@ async function init() {
       return;
     }
 
-    _starting = true;
-    const btn   = document.getElementById("open-ui-btn");
-    const lbl   = document.getElementById("status-label");
-    const orig  = btn.textContent;
-    btn.textContent = "Starting…";
-    btn.disabled    = true;
-    lbl.textContent = "Starting server…";
-
-    const result = await browser.runtime.sendMessage({ type: "START_SERVER" });
-    if (result.ok) {
-      browser.tabs.create({ url: `${VAULT_URL}/unlock` });
-      window.close();
-      return;
-    }
-
-    _starting       = false;
-    btn.textContent = orig;
-    btn.disabled    = false;
-    lbl.textContent = "Server offline";
-    toast(result.error || "Couldn't start server — run ./clortho_start.sh", "err");
+    toast("Server offline — run: systemctl --user restart clortho.service", "err");
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => document.getElementById("toast").classList.remove("show"), 6000);
   });
@@ -179,7 +158,7 @@ async function init() {
     body.innerHTML = `<div class="locked-state">
       <div class="lock-icon">⚠️</div>
       <div class="lock-msg">Clortho server isn't running.<br>
-        Click <strong style="color:#cc2222">Open Vault ↗</strong> above to start it automatically.
+        Run <code>systemctl --user restart clortho.service</code> to start it.
       </div>
     </div>`;
     return;
