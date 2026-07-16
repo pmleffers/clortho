@@ -24,6 +24,15 @@ from pathlib import Path
 from functools import wraps
 from datetime import datetime
 
+# Windows consoles often default to a legacy codepage (e.g. cp1252) that can't
+# encode the emoji used in this file's startup banner, crashing with a
+# UnicodeEncodeError before the server can even start. Force UTF-8 on stdout/
+# stderr regardless of the underlying console's codepage — harmless no-op on
+# Linux/Mac, where these streams are already UTF-8.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
 # ── Add parent dir so we can import Clortho core ─────────────────
 sys.path.insert(0, str(Path(__file__).parent))
 

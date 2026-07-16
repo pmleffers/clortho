@@ -25,6 +25,15 @@ import socket
 from pathlib import Path
 from datetime import datetime
 
+# Windows consoles often default to a legacy codepage (e.g. cp1252) that can't
+# encode the emoji used in this file's branding/output, crashing with a
+# UnicodeEncodeError before the app can even start. Force UTF-8 on stdout/
+# stderr regardless of the underlying console's codepage — harmless no-op on
+# Linux/Mac, where these streams are already UTF-8.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
 # ─────────────────────────────────────────────
 # NETWORK FIREWALL
 # Intercept ALL socket connections at runtime.
