@@ -78,6 +78,11 @@ def add_cors(response):
 @app.route("/api/import", methods=["OPTIONS"])
 @app.route("/api/generate", methods=["OPTIONS"])
 @app.route("/api/lock", methods=["OPTIONS"])
+@app.route("/api/backup", methods=["OPTIONS"])
+@app.route("/api/backup/set", methods=["OPTIONS"])
+@app.route("/api/backup/now", methods=["OPTIONS"])
+@app.route("/api/backup/list", methods=["OPTIONS"])
+@app.route("/api/backup/restore", methods=["OPTIONS"])
 def options_handler(**kwargs):
     return "", 204
 
@@ -444,6 +449,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
       </div>
     </div>
     <div class="sidebar-bottom">
+      <div id="backup-status" style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5;cursor:pointer;" onclick="openBackupModal()" title="Click to configure backups"></div>
       <button class="lock-btn" onclick="lockVault()">⊠ Lock &amp; Exit</button>
     </div>
   </div>
@@ -610,6 +616,43 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
   </div>
 </div>
 
+<!-- Backup modal -->
+<div class="modal-backdrop" id="backup-modal">
+  <div class="panel" style="max-width:460px">
+    <div class="panel-header">
+      <span>💾 Automatic Backups</span>
+      <button class="panel-close" onclick="closeModal('backup-modal')">×</button>
+    </div>
+    <div class="panel-body" style="padding-bottom:0">
+
+      <!-- Status row -->
+      <div id="backup-status-row" style="margin-bottom:16px;font-size:13px;"></div>
+
+      <!-- Directory setting -->
+      <label style="display:block;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:6px;">Backup directory</label>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input id="backup-dir-input" type="text" placeholder="/run/media/matt/USB/clortho-backups"
+               style="flex:1;min-width:0;" onkeydown="if(event.key==='Enter')saveBackupDir()">
+        <button class="btn btn-primary btn-sm" onclick="saveBackupDir()">Save</button>
+      </div>
+      <p style="color:var(--muted);font-size:11px;margin-top:6px;margin-bottom:20px;">
+        Use an external drive for best protection. Backups are written automatically after every change (last 5 kept).
+      </p>
+
+      <!-- Restore section -->
+      <div style="border-top:1px solid var(--border);padding-top:16px;margin-bottom:4px;">
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:10px;">Restore from backup</div>
+        <div id="backup-list-wrap"></div>
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="backupNow()">▶ Backup Now</button>
+      <button class="btn btn-ghost" onclick="closeModal('backup-modal')">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast -->
 <div id="toast"><span class="toast-dot"></span><span id="toast-msg"></span></div>
 
@@ -623,6 +666,7 @@ let searchQuery = '';
 // ── Boot ──────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   loadEntries();
+  loadBackupStatus();
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') { closePanel(); }
     if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -787,7 +831,7 @@ async function saveApiKey() {
   const service = document.getElementById('ak-service').value.trim();
   const name    = document.getElementById('ak-name').value.trim();
   const token   = document.getElementById('ak-token').value.trim();
-  if (!service || !name || !token) { showToast('Service, Key Name and Token are required', 'error'); return; }
+  if (!service || !name || !token) { toast('Service, Key Name and Token are required', 'error'); return; }
   const body = {
     site:     service,
     username: name,
@@ -797,10 +841,10 @@ async function saveApiKey() {
     category: 'API Keys',
   };
   const r = await fetch('/api/entries', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
-  if (!r.ok) { showToast('Failed to save', 'error'); return; }
+  if (!r.ok) { toast('Failed to save', 'error'); return; }
   closeModal('apikey-modal');
   await loadEntries();
-  showToast('API key saved');
+  toast('API key saved');
 }
 
 function quickEdit(id) { editEntry(id); }
@@ -980,6 +1024,113 @@ function toast(msg, type='success') {
   el.className = `show ${type}`;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// ── Backup ────────────────────────────────────────────────────────────
+async function loadBackupStatus() {
+  const r = await fetch('/api/backup');
+  if (!r.ok) return;
+  const s = await r.json();
+  const el = document.getElementById('backup-status');
+  if (!el) return;
+  if (s.configured) {
+    const last = s.last_backup
+      ? new Date(s.last_backup).toLocaleString(undefined, {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})
+      : 'never';
+    const warn = !s.dir_accessible ? ' <span style="color:#f0a500" title="Drive may not be mounted">⚠</span>' : '';
+    el.innerHTML = `💾 Backup: <span style="color:var(--accent)">${s.count}/5</span>${warn}<br><span style="font-size:10px">Last: ${last}</span>`;
+  } else {
+    el.innerHTML = `<span style="color:#f0a500">⚠ Backups not configured</span>`;
+  }
+}
+
+async function openBackupModal() {
+  document.getElementById('backup-modal').classList.add('open');
+  const [statusRes, listRes] = await Promise.all([
+    fetch('/api/backup'),
+    fetch('/api/backup/list'),
+  ]);
+  const s = await statusRes.json();
+  const backups = await listRes.json();
+
+  // Populate status row
+  const statusRow = document.getElementById('backup-status-row');
+  if (s.configured) {
+    const accessible = s.dir_accessible
+      ? `<span style="color:var(--accent)">✓ accessible</span>`
+      : `<span style="color:#f0a500">⚠ drive not mounted</span>`;
+    const last = s.last_backup ? new Date(s.last_backup).toLocaleString() : 'none yet';
+    statusRow.innerHTML = `<b>Directory:</b> <code style="font-size:11px">${s.backup_dir}</code> ${accessible}<br>`
+      + `<b>Backups stored:</b> ${s.count} of 5 &nbsp;·&nbsp; <b>Last:</b> ${last}`;
+  } else {
+    statusRow.innerHTML = '<span style="color:#f0a500">No backup directory configured yet.</span>';
+  }
+
+  // Pre-fill the input with currently saved path (even if dir is inaccessible)
+  document.getElementById('backup-dir-input').value = s.backup_dir || '';
+
+  // Populate backup list
+  const wrap = document.getElementById('backup-list-wrap');
+  if (!backups.length) {
+    wrap.innerHTML = '<div style="color:var(--muted);font-size:13px;">'
+      + (s.configured ? 'No backups yet — make a change or click Backup Now.' : 'Set a backup directory first.')
+      + '</div>';
+  } else {
+    wrap.innerHTML = backups.map(b => {
+      const dt = new Date(b.modified).toLocaleString(undefined, {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;">
+        <span><span style="color:var(--muted);font-size:11px;">${dt}</span>&nbsp; ${b.size_kb} KB</span>
+        <button class="btn btn-ghost btn-sm" onclick="restoreBackup('${b.filename}')">Restore</button>
+      </div>`;
+    }).join('');
+  }
+}
+
+async function saveBackupDir() {
+  const path = document.getElementById('backup-dir-input').value.trim();
+  if (!path) { toast('Enter a directory path', 'error'); return; }
+  const r = await fetch('/api/backup/set', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({path}),
+  });
+  const d = await r.json();
+  if (d.ok) {
+    toast('Backup directory saved', 'success');
+    closeModal('backup-modal');
+    loadBackupStatus();
+  } else {
+    toast(d.error || 'Failed to save', 'error');
+  }
+}
+
+async function backupNow() {
+  const r = await fetch('/api/backup/now', {method: 'POST'});
+  const d = await r.json();
+  if (d.ok) {
+    toast('Backup written', 'success');
+    loadBackupStatus();
+    openBackupModal();   // refresh the list inside the modal
+  } else {
+    toast(d.error || 'Backup failed — is the directory configured?', 'error');
+  }
+}
+
+async function restoreBackup(filename) {
+  if (!confirm(`Restore from backup "${filename}"?\n\nThis will replace ALL current vault entries with the backup contents.`)) return;
+  const r = await fetch('/api/backup/restore', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({filename}),
+  });
+  const d = await r.json();
+  if (d.ok) {
+    toast(`Restored ${d.entries} entries`, 'success');
+    closeModal('backup-modal');
+    loadEntries();   // refresh the main vault view
+  } else {
+    toast(d.error || 'Restore failed', 'error');
+  }
 }
 </script>
 </body>
@@ -1190,6 +1341,55 @@ def generate_pw():
     except ValueError:
         length = 20
     return jsonify({"password": vk.generate_password(length)})
+
+
+@app.route("/api/backup", methods=["GET"])
+@require_unlock
+def backup_status():
+    return jsonify(get_vault().backup_status())
+
+
+@app.route("/api/backup/set", methods=["POST"])
+@require_unlock
+def backup_set():
+    data = request.get_json(silent=True) or {}
+    path = (data.get("path") or "").strip()
+    if not path:
+        return jsonify({"error": "path required"}), 400
+    try:
+        target = get_vault().set_backup_dir(path)
+        return jsonify({"ok": True, "backup_dir": str(target)})
+    except OSError as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/backup/now", methods=["POST"])
+@require_unlock
+def backup_now():
+    dest = get_vault()._backup_vault()
+    if dest:
+        return jsonify({"ok": True, "path": str(dest)})
+    return jsonify({"error": "No backup directory configured"}), 400
+
+
+@app.route("/api/backup/list", methods=["GET"])
+@require_unlock
+def backup_list():
+    return jsonify(get_vault().list_backups())
+
+
+@app.route("/api/backup/restore", methods=["POST"])
+@require_unlock
+def backup_restore():
+    data     = request.get_json(silent=True) or {}
+    filename = (data.get("filename") or "").strip()
+    if not filename:
+        return jsonify({"error": "filename required"}), 400
+    try:
+        count = get_vault().restore_from_backup(filename)
+        return jsonify({"ok": True, "entries": count})
+    except (FileNotFoundError, ValueError) as e:
+        return jsonify({"error": str(e)}), 400
 
 
 # ─────────────────────────────────────────────

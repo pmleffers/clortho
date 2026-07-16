@@ -90,11 +90,13 @@ console = Console()
 # CONSTANTS
 # ─────────────────────────────────────────────
 
-SALT_FILE   = ".vk_salt"
-VAULT_FILE  = "vault.vk"
-ITERATIONS  = 480_000          # OWASP 2023 PBKDF2-SHA256 minimum
-MIN_PW_LEN  = 12               # enforce a real minimum
-MAX_RETRIES = 3                # wrong-password lock-out
+SALT_FILE    = ".vk_salt"
+VAULT_FILE   = "vault.vk"
+CONFIG_FILE  = "config.json"
+ITERATIONS   = 480_000          # OWASP 2023 PBKDF2-SHA256 minimum
+MIN_PW_LEN   = 12               # enforce a real minimum
+MAX_RETRIES  = 3                # wrong-password lock-out
+BACKUP_KEEP  = 5                # number of rolling backups to retain
 
 
 # ─────────────────────────────────────────────
@@ -209,7 +211,122 @@ class Clortho:
     def is_initialized(self) -> bool:
         return self.vault_path.exists()
 
+    # ── Config ────────────────────────────────
+
+    def _config_path(self) -> Path:
+        return self.vault_dir / CONFIG_FILE
+
+    def load_config(self) -> dict:
+        p = self._config_path()
+        if p.exists():
+            try:
+                return json.loads(p.read_text())
+            except (json.JSONDecodeError, OSError):
+                return {}
+        return {}
+
+    def save_config(self, cfg: dict) -> None:
+        p = self._config_path()
+        p.write_text(json.dumps(cfg, indent=2))
+        p.chmod(0o600)
+
+    def get_backup_dir(self) -> Path | None:
+        d = self.load_config().get("backup_dir")
+        return Path(d).expanduser().resolve() if d else None
+
+    def set_backup_dir(self, path: str) -> Path:
+        target = Path(path).expanduser().resolve()
+        target.mkdir(parents=True, exist_ok=True)
+        cfg = self.load_config()
+        cfg["backup_dir"] = str(target)
+        self.save_config(cfg)
+        return target
+
     # ── Persistence ───────────────────────────
+
+    def _backup_vault(self) -> Path | None:
+        """Copy the encrypted vault to the backup directory (if configured).
+        Keeps the last BACKUP_KEEP copies; older ones are deleted automatically.
+        Returns the backup path on success, None if no backup dir is set."""
+        backup_dir = self.get_backup_dir()
+        if not backup_dir:
+            return None
+        try:
+            backup_dir.mkdir(parents=True, exist_ok=True)
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+            dest = backup_dir / f"vault_{ts}.vk"
+            dest.write_bytes(self.vault_path.read_bytes())
+            dest.chmod(0o600)
+            # Keep .vk_salt alongside the backups (single copy — salt never changes)
+            salt_dest = backup_dir / SALT_FILE
+            if not salt_dest.exists():
+                salt_src = self.vault_dir / SALT_FILE
+                if salt_src.exists():
+                    salt_dest.write_bytes(salt_src.read_bytes())
+                    salt_dest.chmod(0o600)
+            # Rotate: delete oldest backups beyond BACKUP_KEEP
+            backups = sorted(backup_dir.glob("vault_*.vk"))
+            for old in backups[:-BACKUP_KEEP]:
+                old.unlink(missing_ok=True)
+            return dest
+        except OSError:
+            return None
+
+    def backup_status(self) -> dict:
+        """Return backup configuration and last-backup info.
+        configured_path is always returned if set in config, even if the
+        directory is currently unreachable (e.g. drive not mounted)."""
+        cfg_path = self.load_config().get("backup_dir")
+        if not cfg_path:
+            return {"configured": False, "backup_dir": None, "dir_accessible": False,
+                    "last_backup": None, "count": 0}
+        backup_dir = Path(cfg_path).expanduser().resolve()
+        accessible = backup_dir.exists()
+        backups    = sorted(backup_dir.glob("vault_*.vk")) if accessible else []
+        last       = backups[-1].stat().st_mtime if backups else None
+        last_iso   = datetime.fromtimestamp(last).isoformat() if last else None
+        return {
+            "configured": True,
+            "backup_dir": str(backup_dir),
+            "dir_accessible": accessible,
+            "last_backup": last_iso,
+            "count": len(backups),
+        }
+
+    def list_backups(self) -> list:
+        """Return metadata for each backup file, newest first."""
+        backup_dir = self.get_backup_dir()
+        if not backup_dir or not backup_dir.exists():
+            return []
+        backups = sorted(backup_dir.glob("vault_*.vk"), reverse=True)
+        result = []
+        for b in backups:
+            stat = b.stat()
+            result.append({
+                "filename": b.name,
+                "path": str(b),
+                "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                "size_kb": round(stat.st_size / 1024, 1),
+            })
+        return result
+
+    def restore_from_backup(self, filename: str) -> int:
+        """Decrypt a backup file and replace the current vault data.
+        Returns the number of entries restored."""
+        backup_dir = self.get_backup_dir()
+        if not backup_dir:
+            raise ValueError("No backup directory configured")
+        backup_path = (backup_dir / filename).resolve()
+        # Safety: must be inside the backup dir
+        if not str(backup_path).startswith(str(backup_dir)):
+            raise ValueError("Invalid backup filename")
+        if not backup_path.exists():
+            raise FileNotFoundError(f"Backup not found: {filename}")
+        ciphertext  = backup_path.read_bytes()
+        data        = decrypt_vault(ciphertext, self._key)
+        self.data   = data
+        self._save()
+        return len(self.data.get("entries", []))
 
     def _save(self):
         """Encrypt and write the vault. Atomic write via temp file."""
@@ -218,6 +335,7 @@ class Clortho:
         tmp_path.write_bytes(ciphertext)
         tmp_path.chmod(0o600)
         tmp_path.replace(self.vault_path)        # atomic on POSIX
+        self._backup_vault()
 
     # ── CRUD ──────────────────────────────────
 
@@ -317,7 +435,7 @@ class Clortho:
             "site":     ["site", "name", "website", "service", "title", "account"],
             "username": ["username", "user", "email", "login", "email address", "user name"],
             "password": ["password", "pass", "passwd", "pwd"],
-            "url":      ["url", "link", "web address", "address"],
+            "url":      ["url", "link", "web address", "address", "login_uri"],
             "notes":    ["notes", "note", "comment", "comments", "remark"],
             "category": ["category", "cat", "group", "folder", "type"],
         }
@@ -526,6 +644,7 @@ HELP_TEXT = """
   [cyan]webpage / web[/cyan]    Fetch a URL and add credentials (asks permission first)
   [cyan]generate[/cyan]         Generate a strong random password
   [cyan]export[/cyan]           Export vault to plaintext CSV (prompts for confirmation)
+  [cyan]backup[/cyan]           Manage automatic backups (backup set/show/now)
   [cyan]quit   / q[/cyan]       Exit and lock vault
   [cyan]help   / ?[/cyan]       Show this message
 """
@@ -687,6 +806,45 @@ def interactive_mode(vault: Clortho):
             if Confirm.ask("Continue?", default=False):
                 out = Prompt.ask("Output filename", default="vault_export.csv")
                 vault.export_csv(out)
+
+        # ── backup ───────────────────────────
+        elif cmd.split()[0] in ("backup", "bk"):
+            parts = cmd.split(None, 1)
+            sub   = parts[1].strip() if len(parts) > 1 else "show"
+
+            if sub.startswith("set"):
+                # backup set /path/to/dir
+                arg = sub[3:].strip()
+                if not arg:
+                    arg = Prompt.ask("Backup directory path")
+                target = vault.set_backup_dir(arg)
+                console.print(f"[green]✓ Backup directory set to:[/green] {target}")
+                console.print("[dim]Backups are written automatically after every change.[/dim]")
+
+            elif sub == "now":
+                dest = vault._backup_vault()
+                if dest:
+                    console.print(f"[green]✓ Backup written:[/green] {dest}")
+                else:
+                    console.print(
+                        "[yellow]No backup directory configured.[/yellow] "
+                        "Use [bold]backup set <path>[/bold] first."
+                    )
+
+            else:  # show / status
+                status = vault.backup_status()
+                if status["configured"]:
+                    console.print(f"[bold]Backup directory:[/bold] {status['backup_dir']}")
+                    console.print(f"[bold]Stored backups  :[/bold] {status['count']} (keep last {BACKUP_KEEP})")
+                    if status["last_backup"]:
+                        console.print(f"[bold]Last backup     :[/bold] {status['last_backup']}")
+                    else:
+                        console.print("[dim]No backups yet — make a change or run 'backup now'.[/dim]")
+                else:
+                    console.print(
+                        "[yellow]Backups not configured.[/yellow] "
+                        "Use [bold]backup set <path>[/bold] to enable."
+                    )
 
         # ── help ─────────────────────────────
         elif cmd in ("help", "h", "?"):
