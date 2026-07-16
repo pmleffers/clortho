@@ -1108,9 +1108,9 @@ async function backupNow() {
   const r = await fetch('/api/backup/now', {method: 'POST'});
   const d = await r.json();
   if (d.ok) {
-    toast('Backup written', 'success');
+    toast('Data backed up', 'success');
+    closeModal('backup-modal');
     loadBackupStatus();
-    openBackupModal();   // refresh the list inside the modal
   } else {
     toast(d.error || 'Backup failed — is the directory configured?', 'error');
   }
